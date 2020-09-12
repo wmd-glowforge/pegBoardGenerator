@@ -1,0 +1,282 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+<title>Pegboard Hole Generator</title>
+<style>
+.version {
+	position: absolute;
+	top: 0;
+	right: 0;
+	padding: 40px 80px;
+	font-size: 12px;
+	cursor: default;
+}
+
+a + input {
+	margin-right: 5px;
+    padding-bottom: 3px;
+}
+
+.download {
+	float: right;
+}
+</style>
+<script>
+var config = {
+	dpi: 96, // dots(pixels) per inch
+	holeSize: localStorage.getItem('holeSize') || 24, // diameter (pixels)
+	holeDistance: localStorage.getItem('holeDistance') || 96, // distance between centers (pixels)
+	rows: localStorage.getItem('rows') || 4,
+	cols: localStorage.getItem('cols') || 8,
+};
+var minValue = {
+	holeSize: 1,
+	holeDistance: 1,
+	rows: 1,
+	cols: 1
+};
+var maxValue = {
+	
+};
+
+function download(data, filename, type) {
+    var file = new Blob([data], {type: type});
+    if (window.navigator.msSaveOrOpenBlob) // IE10+
+        window.navigator.msSaveOrOpenBlob(file, filename);
+    else { // Others
+        var a = document.createElement("a"),
+                url = URL.createObjectURL(file);
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);  
+        }, 0); 
+    }
+}
+
+function isNumber(value) {
+   return typeof value === 'number' && isFinite(value);
+}
+
+function draw() {
+	var svg = document.getElementById('holeGenerator');
+	svg.innerHTML = '';
+	
+	var width = (config.cols + 1) * config.holeDistance;
+	var height = (config.rows + 1) * config.holeDistance;
+	
+	svg.setAttribute('width', (width) + 'px');
+	svg.setAttribute('height', (height) + 'px');
+	svg.setAttribute('viewBox', '0 0 ' + (width) + ' ' + (height));
+
+	var circle;
+	for(var r = 0; r < config.rows; r++) {
+		for(var c = 0; c < config.cols; c++) {
+			circle = document.createElementNS("http://www.w3.org/2000/svg",'circle');
+			circle.style.fill = 'none';
+			circle.style.stroke = '#000080';
+			circle.setAttribute('r', config.holeSize / 2);
+			circle.setAttribute('cx', (c+1) * config.holeDistance);
+			circle.setAttribute('cy', (r+1) * config.holeDistance);
+			svg.appendChild(circle);
+		}
+	}
+	
+	updateImage();
+}
+
+function updateImage() {
+	var svg = document.getElementById('holeGenerator');
+	// get svg source.
+	var serializer = new XMLSerializer();
+	var source = serializer.serializeToString(svg);
+	// add name spaces.
+	if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+	    source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+	}
+	if(!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)){
+	    source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+	}
+	var xml = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+	var imageSourceData = 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(xml)
+	var img = document.getElementById('image');
+	img.src = imageSourceData;
+	img.style.maxWidth = config.scaleView ? '100%' : 'max-content';
+	document.getElementById('imagelink').href = imageSourceData;
+}
+function copyToClipboard() {
+	var text = document.getElementById('filename');
+	var prevValue = text.value;
+	var svg = document.getElementById('holeGenerator');
+	text.value = svg.outerHTML;
+	text.select();
+	document.execCommand("copy");
+	text.value = prevValue;
+}
+function allowNumbers(evt, propName) {
+	var event = evt || window.event;
+	var ascii = event.keyCode || event.which;
+	var allowKey = false;
+	switch(ascii) {
+		// Allow these keys to act normal
+		case 8: // Backspace
+		case 9: // Tab
+		case 13: // Enter
+		case 46: // Delete
+		case 48: case 96: // 0
+		case 49: case 97: // 1
+		case 50: case 98: // 2 
+		case 51: case 99: // 3 
+		case 52: case 100: // 4 
+		case 53: case 101: // 5 
+		case 54: case 102: // 6 
+		case 55: case 103: // 7 
+		case 56: case 104: // 8 
+		case 57: case 105: // 9
+			allowKey = true; 
+			break;
+		case 107: // Plus (keypad)
+		case 187: // Plus/Equals
+		case 38: // Up arrow
+		case 39: // Right arrow
+			config[propName]++;
+			break;
+		case 109: // Minus (keypad)
+		case 189: // Minus/Underscore
+		case 40: // Down arrow
+		case 37: // Left arrow
+			config[propName]--;
+			break;
+		default:
+			console.log('blocked character: ', ascii) 
+			return false;
+	}
+	if(!allowKey) {
+		event.target.value = config[propName];
+		updateValue(event, propName);
+	}
+	return allowKey;
+}
+function updateValue(evt, propName) {
+	var event = evt || window.event;
+	var min = minValue[propName];
+	var max = maxValue[propName];
+	var value = event.target.value;
+	if(value) {
+		config[propName] = parseInt(value);
+		if(min && config[propName] < min) event.target.value = config[propName] = min;
+		if(max && config[propName] > max) event.target.value = config[propName] = max;
+		if(propName == 'sizeValue') config.size = value / 50;
+		draw();
+		localStorage.setItem(propName,value);
+
+		var trans = document.getElementById(propName + 'Translated')
+		if(trans) updateTranslated(value, propName);
+	}
+}
+function updateTranslated(value, propName) {
+	var trans = document.getElementById(propName + 'Translated')
+	var translated = (value / config.dpi).toFixed(4) + '';
+	translated = translated.replace(/\.?0+$/,'');
+	trans.innerHTML = "(" + translated + "\")";
+}
+function setProperty(evt, propName) {
+	var event = evt || windoe.event;
+	config[propName] = event.target.checked;
+	if(propName == 'monospace' && event.target.checked) { 
+		document.getElementById('kerning').checked = config['kerning'] = false;
+		localStorage.setItem('kerning', 'false');
+	}
+	if(propName == 'kerning' && event.target.checked) { 
+		document.getElementById('monospace').checked = config['monospace'] = false;
+		localStorage.setItem('monospace', 'false');
+	}
+	draw();
+	localStorage.setItem(propName, event.target.checked ? 'true' : 'false');
+}
+function updateFilename(evt) {
+	var event = evt || window.event;
+	var value = event.target.value || 'download-filename.svg';
+	document.getElementById('imagelink').setAttribute('download', value);
+	event.target.value = value;
+}
+
+function pageLoad() {
+	// Initialize form values.
+	document.getElementById('holeSize').focus();
+	document.getElementById('holeSize').value = config.holeSize;
+	updateTranslated(config.holeSize, 'holeSize');
+	document.getElementById('holeDistance').value = config.holeDistance;
+	updateTranslated(config.holeDistance, 'holeDistance');
+	document.getElementById('rows').value = config.rows;
+	document.getElementById('cols').value = config.cols;
+	
+	draw();
+};
+</script>
+</head>
+<body class="bg-light" onload="pageLoad();">
+    <div class="version">version 1.0.0</div>
+	
+    <div class="container">
+
+		<div class="py-5 text-center">
+			<h2>Pegboard Hole Generator</h2>
+			<p class="lead">A simple HTML file that uses JavaScript to generate an SVG of circles used to create a pegboard.</p>
+		</div>
+
+		<div class="row">
+			<div class="col-md-8 mb-4">
+			  <h4 class="d-flex justify-content-between align-items-center mb-3">Workspace</h4>
+			  <style>svg { position:absolute; visibility:hidden; }</style>
+			  <svg version="1.1" xmlns="http://www.w3.org/2000/svg" id="holeGenerator" width="300" height="75" viewBox="-1 -1 300 75" data-by="bill.m.davis"></svg>
+			  <div class="border mt-3 p-3" style="background-image: linear-gradient(45deg, #eeeeee 25%, transparent 25%), linear-gradient(-45deg, #eeeeee 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eeeeee 75%), linear-gradient(-45deg, transparent 75%, #eeeeee 75%);
+			  background-size: 20px 20px;
+			  background-position: 0 0, 0 10px, 10px -10px, -10px 0px; overflow: scroll;">
+			  <img id="image" class="bg-white img-fluid" style="box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);" src=""/></div>
+			  <div class="card mt-3">
+				<div class="card-body">
+					<button type="button" class="btn btn-outline-primary btn-sm" onclick="copyToClipboard()">Copy SVG To Clipboard</button>
+					
+					<a id="imagelink" class="btn btn-primary btn-sm download" download="download-filename.svg" href="">Download SVG</a>
+					<input type="text" id="filename" onchange="updateFilename(event)" value="download-filename.svg" class="download" />
+				</div>
+			  </div>
+			</div>
+
+			<div class="col-md-4">
+			  <h4 class="mb-3">Pegboard Options</h4>
+
+				<div class="row">
+				  <div class="col-md-6 mb-3">
+					<label for="holeSize">Size <span id="holeSizeTranslated"></span></label>
+					<input id="holeSize" type="number" min="1" class="form-control" onkeydown="return allowNumbers(event,'holeSize')" onpaste="return false" onchange="updateValue(event,'holeSize')">
+				  </div>
+				  <div class="col-md-6 mb-3">
+					<label for="holeDistance">Distance <span id="holeDistanceTranslated"></span></label>
+					<input id="holeDistance" type="number" min="1" class="form-control" onkeydown="return allowNumbers(event,'holeDistance')" onpaste="return false" onchange="updateValue(event,'holeDistance')">
+				  </div>
+				</div>
+				
+				<div class="row">
+				  <div class="col-md-6 mb-3">
+					<label for="rows">Rows</label>
+					<input id="rows" type="number" min="1" class="form-control" onkeydown="return allowNumbers(event,'rows')" onpaste="return false" onchange="updateValue(event,'rows')">
+				  </div>
+				  <div class="col-md-6 mb-3">
+					<label for="cols">Columns</label>
+					<input id="cols" type="number" min="1" class="form-control" onkeydown="return allowNumbers(event,'cols')" onpaste="return false" onchange="updateValue(event,'cols')">
+				  </div>
+				</div>
+
+			</div>
+		</div>
+	</div>
+</div>
+
+</body>
+</html>
